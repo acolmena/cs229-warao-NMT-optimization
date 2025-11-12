@@ -137,8 +137,39 @@ plt.tight_layout()
 
 
 # 4. Sentence Length Comparisons: Do Warao or Spanish sentences tend to be more verbose?
+sentences_lst = list(df_all.to_records(index=False)) # generates a list of tuples
+spanish_more_verbose = 0
+warao_more_verbose = 0
+for sentence in sentences_lst:
+    warao_sent = sentence[0]
+    spanish_sent = sentence[1]
+    if len(warao_sent.split()) > len(spanish_sent.split()):
+        warao_more_verbose += 1
+    else: 
+        spanish_more_verbose += 1
+
+print('\n' + '=' * 60)
+print(f"Number of times when Warao sentences were more verbose: {warao_more_verbose} \n")
+print(f"Number of times when Spanish sentences were more verbose: {spanish_more_verbose} \n")
+print(f"{'Spanish' if spanish_more_verbose > warao_more_verbose else 'Warao'} sentences are more verbose.\n")
+print('=' * 60)
 
 
+# 5. Sentence Length Variation: How much do Warao and Spanish sentences vary in length?
+variations = []
+for sentence in sentences_lst:
+    warao_sent = sentence[0]
+    spanish_sent = sentence[1]
+    diff = len(spanish_sent.split()) - len(warao_sent.split())
+    variations.append(diff)
+
+
+
+plt.plot(np.arange(len(sentences_lst)), variations, marker='o')
+plt.xlabel('Sentence number')
+plt.ylabel('Spanish Length - Warao Length')
+plt.title('Sentence Length Variations')
+plt.grid(True)
 
 
 plt.show()
