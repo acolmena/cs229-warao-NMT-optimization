@@ -170,7 +170,7 @@ ax.set_xlim(right=1.5)  # adjust xlim to fit labels
 print('\n' + '=' * 60)
 top_n = 60
 print(f"4) Sentence Length Comparisons: Do Warao or Spanish sentences tend to be more verbose?")
-sentences_lst = list(df_all.to_records(index=False)) # generates a list of tuples
+sentences_lst = list(df_all.to_records(index=False)) # generates a list of tuples (warao_sent, spanish_sent)
 spanish_more_verbose = 0
 warao_more_verbose = 0
 for sentence in sentences_lst:
@@ -194,11 +194,17 @@ print('=' * 60)
 print('\n' + '=' * 60)
 print(f"5) Sentence Length Variation: How much do Warao and Spanish sentences vary in length?")
 variations = []
+warao_sent_lens = []
+spanish_sent_lens = []
 for sentence in sentences_lst:
     warao_sent = sentence[0]
     spanish_sent = sentence[1]
-    diff = len(spanish_sent.split()) - len(warao_sent.split())
+    s_len = len(spanish_sent.split())
+    w_len = len(warao_sent.split())
+    diff = s_len - w_len
     variations.append(diff)
+    spanish_sent_lens.append(s_len)
+    warao_sent_lens.append(w_len)
 
 plt.figure(7, figsize=(10, 6))
 plt.hist(variations, bins=50, color='skyblue', edgecolor='black')
@@ -207,11 +213,18 @@ plt.xlabel('Length Difference (# of words)')
 plt.ylabel('Frequency')
 plt.grid(True, linestyle='--', alpha=0.6)
 
-plt.figure(8, figsize=(10, 6))
-plt.boxplot(variations, vert=False)
-plt.title('Distribution of Sentence Length Differences (Spanish Sent. Length − Warao Sent. Length)')
-plt.xlabel('Length Difference (# of words)')
-plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+# plt.figure(8, figsize=(10, 6))
+# plt.boxplot(variations, vert=False)
+# plt.title('Distribution of Sentence Length Differences (Spanish Sent. Length − Warao Sent. Length)')
+# plt.xlabel('Length Difference (# of words)')
+# plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+
+fig, ax = plt.subplots(sharey=True, tight_layout=True)
+ax.boxplot([warao_sent_lens, spanish_sent_lens], sym='rs', orientation='horizontal', tick_labels=['Warao', 'Spanish'])
+# ax.boxplot(spanish_word_lengths, sym='rs', orientation='horizontal')
+ax.set_xlabel('Sentence Lengths (# of words)')
+ax.set_ylabel('Languages')
+ax.set_title('Distribution of Sentence Lengths')
 
 print(f"Outliers in length variations: {sorted(variations)[-10:]} \n")
 print('=' * 60)
