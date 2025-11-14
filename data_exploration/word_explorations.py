@@ -2,9 +2,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import Counter
-import nltk
-nltk.download('stopwords')
-from nltk.corpus import stopwords
 from sentence_dict_builder import dict_builder
 
 # load parallel data
@@ -63,11 +60,24 @@ ax.boxplot([warao_word_lengths, spanish_word_lengths], sym='rs', orientation='ho
 # ax.boxplot(spanish_word_lengths, sym='rs', orientation='horizontal')
 ax.set_xlabel('Word Length (# of letters)')
 ax.set_ylabel('Languages')
-ax.set_title('Morphological richness: word length distributions')
+ax.set_title('Distribution of Individual Word Lengths')
 
 print('=' * 60)
 
 # visualizing the longest words in each language
+
+
+# ----------------------------------------------------------------------------------------
+
+
+# 3. Morphological richness: Type Token Ratio (TTR) -- # unique words / # total words
+print('\n' + '=' * 60)
+print(f"3) Type Token Ratio (TTR)")
+print(f"Warao TTR: {len(uniq_warao_words) / len(word_dict['Warao']['all_words'])}")
+print(f"Spanish TTR: {len(uniq_spanish_words) / len(word_dict['Spanish']['all_words'])}")
+
+print('=' * 60)
+
 
 # export Warao vocabulary
 df_warao_vocab = pd.DataFrame(uniq_warao_words, columns=['warao_words']).to_csv('./output/warao_vocab.csv', index=False)
