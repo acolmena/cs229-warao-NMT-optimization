@@ -1,2 +1,2 @@
-# cs229-warao-chatgpt
-My CS229 project evaluating tradeoffs between performance, data sovereignty, edge computing, and cultural fit between a system of compound SLMs and an LLM. 
+# CS229 Project: Improving Warao-Spanish Neural Machine Translation
+My CS229 project exploring techniques to increase performance of NMT of Warao using limited finetuning data.
