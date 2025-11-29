@@ -1,6 +1,5 @@
 # from tokenizers import ByteLevelBPETokenizer
 from tokenizers.trainers import BpeTrainer
-# from transformers import RobertaTokenizerFast
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import Whitespace
@@ -12,8 +11,11 @@ import random
 random.seed(42)
 
 
-""" Train a tokenizer on Warao training data. To find useful token candidates
-    to expand embeddin matrices of pre-trained models. 
+""" 
+Train a tokenizer on Warao training data. 
+
+To find useful token candidates to expand 
+embeddin matrices of pre-trained models. 
 """
 
 def generate_toks(example_text, tokenizer):
@@ -24,23 +26,25 @@ def generate_toks(example_text, tokenizer):
         print(f"\nTokenized text: {tokens}")
         print("-" * 30)
 
+
 def compute_token_stats(tokens):
     series_toks = pd.Series(list(tokens))
     print("Learned token length stats:")
     print(series_toks.apply(len).describe())
 
-def train_tokenizer(model_name=None, training_data_path=None, output_tok_path=None, example_text=None):
-    with open(training_data_path, 'r', encoding='utf-8') as f:
-        warao_text = f.read()
-
+def test_old_tokenizer(model_name=None, example_text=None):
     old_tokenizer = AutoTokenizer.from_pretrained(model_name)
     # output old tokens:
     print("Old tokenizer tokens:")
     generate_toks(example_text, old_tokenizer)
     print(old_tokenizer)
+
+
+def train_tokenizer(model_name=None, training_data_path=None, output_tok_path=None, example_text=None):
     
     # new_tokenizer = old_tokenizer.train_new_from_iterator(warao_text, 10000) <--- WHATS THE DIFFERENCE BTWN THIS
 
+    # !! train BPE tokenizer to get useful tokens!!
     new_tokenizer = Tokenizer(BPE())     # <---- AND THESE LINES (WHATS THE DIFFERENCE BWN TRAINING A TOKENIZER FROM ANOTHER TOKENIZER VS THIS?)
     new_tokenizer.pre_tokenizer = Whitespace()
     trainer = BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
@@ -69,20 +73,12 @@ def train_tokenizer(model_name=None, training_data_path=None, output_tok_path=No
     else:
         print("No tokens removed.")
     
-    breakpoint()
     # output new tokens on same text:
     print("New tokenizer tokens:")
 
     # save new tokenizer
-    new_tokenizer.save_pretrained("warao_{model_name}_tokenizer")
-    # tokenizer = Tokenizer(BPE())
-    # tokenizer.pre_tokenizer = Whitespace()
-    # trainer = BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
-    # tokenizer.train(files=[training_data_path], trainer=trainer)
-    # tokenizer.save_model(output_tok_path)
+    new_tokenizer.save(output_tok_path)
 
-    # tokenizer = ByteLevelBPETokenizer()
-    # tokenizer.train(files="input.txt", vocab_size=1000) # WHAT IS THIS VOCAB_SIZE PARAMETER
 
 
 
@@ -93,7 +89,13 @@ if __name__ == "__main__":
                     "Tatuma kotubukunarai", # "let them play"
                     "Ma ijoro nisakitía",   # "i will remove my molar"
                     "Ya araisamaya Pablo kaiamo naruae Jacobo mikitane. Ikeresia airamo kokotuka tata ja.,"] # "Al día siguiente Pablo fue con nosotros a ver a Jacobo (Santiago, hermano de Jesús), y todos los ancianos estaban presentes."" 
-    output_tok_path = 'warao_tokenizer_model'
-    training_data_path = "./utils/input/parallel_train.txt"
+    
+    output_tok_path = 'warao_tokenizer_parallel'
+    data_path = "./utils/input/parallel_train.txt"
 
-    train_tokenizer(model_name, training_data_path, output_tok_path, example_text)
+    output_tok_path = ' warao_tokenizer_monolingual'
+    monolingual_data_path = "./utils/input/monolingual_warao_bible.txt"
+
+    test_old_tokenizer(model_name, example_text)
+    train_tokenizer(model_name, data_path, output_tok_path, example_text)
+    train_tokenizer(model_name, monolingual_data_path, output_tok_path, example_text)
