@@ -1,5 +1,5 @@
 """
-This code is adapted from: https://www.cs.columbia.edu/~johnhew//vocab-expansion.html 
+Part of this code is adapted from: https://www.cs.columbia.edu/~johnhew//vocab-expansion.html 
 """
 
 import transformers
