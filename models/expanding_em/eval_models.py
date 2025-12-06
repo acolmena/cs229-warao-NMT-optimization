@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 FROM_FILE = True
-TEST_ON_TEST = True
+TEST_ON_TEST = False
 BATCH_SIZE = 32
 MAX_LEN = 128
 NUM_BEAMS = 4
@@ -26,9 +26,12 @@ model_configs = {
 
 MODEL_NAME = list(model_configs.keys())[2]
 MODEL = MODEL_NAME.split('/')[1]
-OUTPUT_DIR = 'best-' + MODEL
+if TEST_ON_TEST: 
+    OUTPUT_DIR = 'best-' + MODEL
+else: 
+    OUTPUT_DIR = 'val-best-' + MODEL
 if FROM_FILE:
-    model_dir = "/Users/anabelle/Desktop/cs229-warao-NMT-optimization/models/input/mbart-large-50-many-to-many-mmt-finetuned-warao-es_sweep_6j1apmrg"
+    model_dir = ""
 else:
     model_dir = MODEL_NAME
 
@@ -46,15 +49,17 @@ chrf = load("chrf")
 
 
 if TEST_ON_TEST:
-    dataset = load_dataset("csv", data_files={'test': "/Users/anabelle/Desktop/cs229-warao-NMT-optimization/models/input/final_parallel_test.csv"})['test']
+    dataset = load_dataset("csv", data_files={'test': "final_parallel_test.csv"})['test']
 else:
-    dataset = load_dataset("csv", data_files={'validation': "/Users/anabelle/Desktop/cs229-warao-NMT-optimization/models/input/final_parallel_val.csv"})['validation']
+    dataset = load_dataset("csv", data_files={'validation': "final_parallel_val.csv"})['validation']
 
 source_sentences = [ex['warao_sentence'] for ex in dataset]
 references_full = [ex['spanish_sentence'] for ex in dataset]
 
 
 src_lang, tgt_lang = model_configs[MODEL_NAME] 
+
+print(f'Testing {MODEL_NAME} model with source code {src_lang} and target code {tgt_lang}')
 
 
 def batch_data(data, batch_size):
@@ -127,8 +132,8 @@ for batch in tqdm(batch_data(dataset, BATCH_SIZE), total=(len(dataset)+BATCH_SIZ
 
     if len(predictions) % 40 == 0:
         print('-' * 60)
-        print(batch_preds[0])
-        print(batch_refs[0])
+        print(f'Prediction: {batch_preds[0]}')
+        print(f'Reference: {batch_refs[0]}')
         print('-' * 60)
         print(f"Processed {len(predictions)} examples...")
 
