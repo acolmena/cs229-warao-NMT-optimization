@@ -50,6 +50,8 @@ import json
 set_seed(42)
 
 
+EXTEND_EMBEDDING = True   # whether to extend embedding matrix with new tokens
+VERSION = 'v2'  # 'v0' base m2m model, 'v1' for Warao vocab list, 'v2' for BPE tokenizer json file
 
 model_configs = {
     "facebook/m2m100_418M": ("pt", "es"),   # order: src, target
@@ -70,7 +72,7 @@ MODEL = MODEL_NAME.split('/')[1]  # simple name version of model for output file
 TRAIN_FILE = "final_parallel_train.csv"
 VAL_FILE = "final_parallel_val.csv"
 TEST_FILE = "final_parallel_test.csv"
-OUTPUT_DIR = f"./{MODEL}-extd-em-full-ft"
+
 SOURCE_CODE = model_configs[MODEL_NAME][0]
 TARGET_CODE = model_configs[MODEL_NAME][1]
 MAX_LEN = 128
@@ -79,7 +81,7 @@ BATCH_SIZE = 8
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 0.01
 WARMUP_STEPS = 0
-LOG_STEPS = 100
+LOG_STEPS = 10
 NUM_BEAMS = 4
 
 do_predictions = True
@@ -87,29 +89,42 @@ do_pred_on_test = True
 do_evaluate = True
 do_eval_on_test = True
 
-TOKEN_FILE = './input/warao_tokenizer_parallel.json'
-VERSION = 'v2'  # 'v1' for Warao vocab list, 'v2' for BPE tokenizer json file
-NUM_NEW_WARAO_TOKENS = 6000  # number of new Warao tokens we'll add to tokenizer
-TOK_START_IDX = 95  # index non special tokens start in vocab
+if VERSION == 'v1': 
+    TOKEN_FILE = 'warao_dictionary_final.csv'
+elif VERSION == 'v2':
+    TOKEN_FILE = 'warao_tokenizer_monolingual.json'
+elif VERSION == 'v3':
+    TOKEN_FILE = 'warao_sentencepiece_7000.model'
+else: 
+    TOKEN_FILE = 'no_extension'
 
-WANDB_RUN_NAME = f"{MODEL}_extd_em_full_ft"
+NUM_NEW_WARAO_TOKENS = 3000  # number of new Warao tokens we'll add to tokenizer
+TOK_START_IDX = 89  # index non special tokens start in vocab
+SPM_PREFIX = "warao_sentencepiece"   
+
+WANDB_RUN_NAME = f"{MODEL}_extd_em_full_ft_{VERSION}"
+OUTPUT_DIR = f"./{MODEL}-extd-em-full-ft_{VERSION}"
 WANDB_PROJECT = "cs229-experiments"
-EXTEND_EMBEDDING = False   # whether to extend embedding matrix with new tokens
+
 
 
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 print("USING DEVICE:", device)
 
-def load_new_tokens(token_file, version='v1'):
+def load_new_tokens(token_file, version=None):
+    print(f'Using version {version}')
     # v1) load Warao vocabulary
     if version == 'v1':
         warao_vocab = pd.read_csv(token_file)
-        warao_vocab_lst = list(warao_vocab['warao_words'])
+        warao_vocab_lst = list(set(warao_vocab['Warao']))
 
         # randomly sample 200 tokens/words in the vocab
         # num_wrds = 1000
         # new_toks = random.sample(warao_vocab_lst, k=num_wrds)
+
+        # remove words with spaces 
+        warao_vocab_lst = [w for w in warao_vocab_lst if len(w.split()) == 1]
         
         # use all new tokens
         new_toks = warao_vocab_lst
@@ -120,8 +135,23 @@ def load_new_tokens(token_file, version='v1'):
             token_data = json.load(f)
         new_toks = random.sample(list(token_data['model']['vocab'].keys())[TOK_START_IDX:], NUM_NEW_WARAO_TOKENS)  # skip special tokens
      
+    elif version == 'v3':
+        from sentencepiece import sentencepiece_model_pb2 as sp_pb2_model
+        import sentencepiece as spm        
+        # Load the custom Warao sentencepiece model
+        sp_trained = spm.SentencePieceProcessor(
+            model_file=TOKEN_FILE
+        )
+        
+        # Parse both models into protobuf format
+        added_spm = sp_pb2_model.ModelProto()
+        added_spm.ParseFromString(sp_trained.serialized_model_proto())
+
+        # # c. Add new tokens/words
+        new_toks = [sp_trained.id_to_piece(i) for i in range(sp_trained.get_piece_size())]
 
     print(f"Preview vocab: {new_toks[:5]}")
+    print(f"Vocab length: {len(new_toks)}")
     return new_toks
 
 
@@ -144,8 +174,8 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
                   max_source_length=400, max_target_length=400,
                   num_train_epochs=3, batch_size=8, learning_rate=1e-4, num_beams=4,
                   do_predictions=True, do_pred_on_test=True,
-                  do_evaluate=True, do_eval_on_test=True, wandb_project="full_ft",
-                  wandb_run_name=None, weight_decay=0.01, warmup_steps=0, use_wandb=False,
+                  do_evaluate=True, do_eval_on_test=True, wandb_project=WANDB_PROJECT,
+                  wandb_run_name=WANDB_RUN_NAME, weight_decay=0.01, warmup_steps=WARMUP_STEPS, use_wandb=True,
                   logging_steps=100, token_file=None, version='v1'):
 
     # log
@@ -156,6 +186,13 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
     )
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
+
+    if do_evaluate:
+        logger.info(f"Will do eval on {'test' if do_eval_on_test else 'validation'} ")
+    if do_predictions:
+        logger.info(f"Will generate predictions on {'test' if do_pred_on_test else 'validation'} ")
+
+    logger.info(f'Final model and predictions will be saved to {output_dir}')
 
     print("\n" + "=" * 50)
     logger.info("Loading datasets . . . ")
@@ -183,8 +220,9 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
 
     # 3) extend embedding matrix -------------------------------------------------------
     if EXTEND_EMBEDDING:
+        # ------------------------------------- version 1 from https://www.cs.columbia.edu/~johnhew//vocab-expansion.html
         print("\n" + "=" * 50)
-        print("Extending embedding matrix . . . ")
+        print(f"Extending embedding matrix with {TOKEN_FILE} file ")
         print("=" * 50)
         # a. Load pretrained model
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
@@ -200,13 +238,12 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
         # d. Resize embeddings
         model.resize_token_embeddings(len(tokenizer))
 
-        # e. follow the instructions from:
+        # e. follow the instructions from: https://www.cs.columbia.edu/~johnhew//vocab-expansion.html -----
         # compute the distribution from which we’ll sample our new embeddings
-        tokens_added = len(new_toks)
-        print(f"Extending embedding matrix by {tokens_added} tokens . . .")
+        print(f"Extending embedding matrix by {num_added} tokens . . .")
         params = model.state_dict()
         embeddings = params['model.shared.weight']
-        pre_expansion_embeddings = embeddings[:-3,:]
+        pre_expansion_embeddings = embeddings[:-num_added,:]
         mu = torch.mean(pre_expansion_embeddings, dim=0)
         n = pre_expansion_embeddings.size()[0]
         sigma = ((pre_expansion_embeddings - mu).T @ (pre_expansion_embeddings - mu)) / n
@@ -214,20 +251,13 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
                 mu, covariance_matrix=1e-5*sigma)
 
         # f. load in new embeddings into model
-        new_embeddings = torch.stack(tuple((dist.sample() for _ in range(3))), dim=0)
-        embeddings[-3:,:] = new_embeddings
-        params['model.shared.weight'][-3:,:] = new_embeddings
+        new_embeddings = torch.stack(tuple((dist.sample() for _ in range(num_added))), dim=0)
+        embeddings[-num_added:,:] = new_embeddings
+        params['model.shared.weight'][-num_added:,:] = new_embeddings
         model.load_state_dict(params)
-
         print(f"New embedding matrix size: {model.get_input_embeddings().weight.size()}")
-        print(f"New vocab (last 10 tokens): {list(tokenizer.get_vocab().keys())[-10:]}" )
-        print(f"New vocab size: {len(tokenizer)}")
-    else:
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
 
-    # breakpoint()
-
-    # -----------------------------------------------------------------------------------
+     # --------------------------------------------------------------------------------------
 
     # set language codes based on model type
     # check if model is a T5-based model
@@ -417,6 +447,9 @@ if __name__ == "__main__":
         do_pred_on_test=do_pred_on_test,
         do_evaluate=do_evaluate,
         do_eval_on_test=do_eval_on_test,
+        wandb_project=WANDB_PROJECT,
+        wandb_run_name=WANDB_RUN_NAME,
+        use_wandb=True,
         token_file=TOKEN_FILE,
         version=VERSION,
     )
