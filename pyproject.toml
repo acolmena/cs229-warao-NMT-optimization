@@ -9,6 +9,7 @@ dependencies = [
     "datasets>=4.4.1",
     "evaluate>=0.4.6",
     "faiss-cpu>=1.13.0",
+    "lmppl>=0.0.1",
     "matplotlib>=3.10.7",
     "pdfplumber>=0.11.8",
     "peft>=0.18.0",
