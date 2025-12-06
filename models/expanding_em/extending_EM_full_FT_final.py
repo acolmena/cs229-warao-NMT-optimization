@@ -49,9 +49,10 @@ import json
 
 set_seed(42)
 
-
-EXTEND_EMBEDDING = True   # whether to extend embedding matrix with new tokens
+FROM_FILE = True
+EXTEND_EMBEDDING = False   # whether to extend embedding matrix with new tokens
 VERSION = 'v2'  # 'v0' base m2m model, 'v1' for Warao vocab list, 'v2' for BPE tokenizer json file
+
 
 model_configs = {
     "facebook/m2m100_418M": ("pt", "es"),   # order: src, target
@@ -68,6 +69,14 @@ model_configs = {
 
 models = list(model_configs.keys())
 MODEL_NAME = models[0]  # change index to try different models
+
+if FROM_FILE:
+    print('LOADING A FRANKENSTEIN MODEL!!!!!! BEWARE!!!!!!')
+    model_dir = "combined_encoder_m2m"
+else:
+    model_dir = MODEL_NAME
+
+
 MODEL = MODEL_NAME.split('/')[1]  # simple name version of model for output file of predictions
 TRAIN_FILE = "final_parallel_train.csv"
 VAL_FILE = "final_parallel_val.csv"
@@ -212,7 +221,7 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
     print("\n" + "=" * 50)
     print(f"Loading {model_name_or_path} model and tokenizer . . . ")
     print("=" * 50)
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, local_files_only=FROM_FILE)
     og_vocab_size = len(tokenizer)
     print(f"Original vocab size: {og_vocab_size}")
 
@@ -225,7 +234,7 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
         print(f"Extending embedding matrix with {TOKEN_FILE} file ")
         print("=" * 50)
         # a. Load pretrained model
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, local_files_only=FROM_FILE)
         print(f"Original embedding matrix size: {model.get_input_embeddings().weight.size()}")
 
         # b. load new tokens 
@@ -256,6 +265,8 @@ def start_training(model_name_or_path, train_file, val_file, test_file, output_d
         params['model.shared.weight'][-num_added:,:] = new_embeddings
         model.load_state_dict(params)
         print(f"New embedding matrix size: {model.get_input_embeddings().weight.size()}")
+    else:
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, local_files_only=FROM_FILE)
 
      # --------------------------------------------------------------------------------------
 
